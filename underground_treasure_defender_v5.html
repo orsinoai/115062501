@@ -61,7 +61,9 @@ document.addEventListener("keydown",e=>{
 function spawnWave(){
  const count=2+floor;
  for(let i=0;i<count;i++){
-   monsters.push({x:18,y:1+i%3,hp:20+floor*5,max:20+floor*5});
+  // 每隻怪物帶上移動計時器（以 frame 為單位），隨樓層縮短移動間隔
+  const baseInterval = Math.max(8, 40 - floor*2); // 初始約 40 frames，向下調整
+  monsters.push({x:18,y:1+i%3,hp:20+floor*5,max:20+floor*5,moveTimer:baseInterval,moveInterval:baseInterval,hitAnim:0});
  }
 }
 setInterval(spawnWave,10000);
@@ -91,12 +93,17 @@ function update(){
  }
 
  towers.forEach(t=>{
-   if(t.cd>0){t.cd--;return;}
-   let target=monsters.find(m=>Math.hypot(m.x-t.x,m.y-t.y)<4);
-   if(target){
-      target.hp -= t.type===1?8:5;
-      t.cd=t.type===1?15:8;
-   }
+  if(t.cd>0){t.cd--;return;}
+  let target=monsters.find(m=>Math.hypot(m.x-t.x,m.y-t.y)<4);
+  if(target){
+    // 造成傷害並設定攻擊動畫（用於繪製攻擊線/命中特效）
+    const dmg = t.type===1?12:8;
+    target.hp -= dmg;
+    target.hitAnim = 8;
+    t.targetX = target.x; t.targetY = target.y; t.hitAnim = 6;
+    // 以 frame 為單位的冷卻，讓弓塔比火塔慢
+    t.cd = t.type===1?30:18;
+  }
  });
 
  for(let i=monsters.length-1;i>=0;i--){
@@ -108,10 +115,16 @@ function update(){
       gainExp(10);
       continue;
    }
-   if(m.x>base.x)m.x--;
-   else if(m.x<base.x)m.x++;
-   if(m.y>base.y)m.y--;
-   else if(m.y<base.y)m.y++;
+  // 以 moveTimer 控制移動頻率，避免每幀移動導致速度過快
+  m.moveTimer--;
+  if(m.moveTimer<=0){
+    if(m.x>base.x)m.x--;
+    else if(m.x<base.x)m.x++;
+    if(m.y>base.y)m.y--;
+    else if(m.y<base.y)m.y++;
+    m.moveTimer = m.moveInterval;
+  }
+  if(m.hitAnim>0)m.hitAnim--;
    if(m.x===base.x&&m.y===base.y){
       monsters.splice(i,1);
       hp-=10;
@@ -132,11 +145,28 @@ function draw(){
  }
  drawEmoji(base.x,base.y,"🏠");
  if(treasure.x>0) drawEmoji(treasure.x,treasure.y,treasure.emoji);
- towers.forEach(t=>drawEmoji(t.x,t.y,t.type===1?"🏹":"🔥"));
+ // 繪製塔與攻擊特效
+ towers.forEach(t=>{
+   drawEmoji(t.x,t.y,t.type===1?"🏹":"🔥");
+   if(t.hitAnim>0){
+     ctx.strokeStyle = t.type===1?"#9be7ff":"#ffb86b";
+     ctx.lineWidth = 2;
+     ctx.beginPath();
+     ctx.moveTo(t.x*T+16,t.y*T+16);
+     ctx.lineTo(t.targetX*T+16,t.targetY*T+16);
+     ctx.stroke();
+     t.hitAnim--;
+   }
+ });
+ // 繪製怪物與命中特效/血條
  monsters.forEach(m=>{
-   drawEmoji(m.x,m.y,"👾");
-   ctx.fillStyle="red"; ctx.fillRect(m.x*T,m.y*T-4,24,3);
-   ctx.fillStyle="lime"; ctx.fillRect(m.x*T,m.y*T-4,24*(m.hp/m.max),3);
+  drawEmoji(m.x,m.y,"👾");
+  if(m.hitAnim>0){
+    ctx.fillStyle = "rgba(255,0,0,0.7)";
+    ctx.beginPath(); ctx.arc(m.x*T+16,m.y*T+8,8,0,Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle="red"; ctx.fillRect(m.x*T,m.y*T-4,24,3);
+  ctx.fillStyle="lime"; ctx.fillRect(m.x*T,m.y*T-4,24*(m.hp/m.max),3);
  });
  drawEmoji(player.x,player.y,"🧙");
  if(player.treasure) drawEmoji(player.x,player.y,"💎");
