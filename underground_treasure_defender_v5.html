@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>地下寶藏守衛 V5</title>
+<style>
+body{margin:0;background:#111;color:#fff;font-family:Arial}
+#hud{display:flex;gap:15px;padding:8px;background:#222;flex-wrap:wrap}
+#mission{color:#ffd54f}
+#msg{padding:8px;background:#333}
+canvas{display:block;margin:auto;background:#1b1b1b}
+</style>
+</head>
+<body>
+<div id="hud">
+<div>💰<span id="gold">500</span></div>
+<div>⭐<span id="score">0</span></div>
+<div>❤️<span id="hp">100</span></div>
+<div>🧙 Lv.<span id="level">1</span></div>
+<div>📍Floor <span id="floor">1</span></div>
+<div id="mission">任務: 找到寶藏</div>
+</div>
+<div id="msg">WASD移動、1箭塔、2火塔、E建造</div>
+<canvas id="g" width="640" height="640"></canvas>
+<script>
+const c=g,ctx=c.getContext('2d');
+const T=32,S=20;
+let gold=500,score=0,hp=100,floor=1,exp=0,level=1;
+let buildType=1;
+const player={x:1,y:1,treasure:false};
+const base={x:18,y:18};
+let treasure=newTreasure();
+const towers=[];
+const monsters=[];
+
+function newTreasure(){
+ const r=Math.random();
+ if(r<0.7)return {x:rnd(),y:rnd(),emoji:'💰',value:500};
+ if(r<0.95)return {x:rnd(),y:rnd(),emoji:'💎',value:1200};
+ return {x:rnd(),y:rnd(),emoji:'👑',value:3000};
+}
+function rnd(){return 2+Math.floor(Math.random()*16)}
+function msg(t){document.getElementById("msg").innerText=t;}
+function gainExp(v){
+ exp+=v;
+ if(exp>=level*100){exp=0;level++;msg("升級 Lv."+level);}
+}
+document.addEventListener("keydown",e=>{
+ if(e.key=="w")player.y=Math.max(1,player.y-1);
+ if(e.key=="s")player.y=Math.min(18,player.y+1);
+ if(e.key=="a")player.x=Math.max(1,player.x-1);
+ if(e.key=="d")player.x=Math.min(18,player.x+1);
+ if(e.key=="1") buildType=1;
+ if(e.key=="2") buildType=2;
+ if(e.key=="e" && gold>=100){
+   towers.push({x:player.x,y:player.y,type:buildType,cd:0,lv:1});
+   gold-=100;
+ }
+});
+
+function spawnWave(){
+ const count=2+floor;
+ for(let i=0;i<count;i++){
+   monsters.push({x:18,y:1+i%3,hp:20+floor*5,max:20+floor*5});
+ }
+}
+setInterval(spawnWave,10000);
+
+function drawEmoji(x,y,e){
+ ctx.font="24px Arial";
+ ctx.fillText(e,x*T+4,y*T+24);
+}
+
+function update(){
+ if(player.x===treasure.x && player.y===treasure.y){
+   player.treasure=true;
+   score+=treasure.value;
+   gold+=100;
+   msg("取得 "+treasure.emoji);
+   treasure={x:-99,y:-99};
+   document.getElementById("mission").innerText="任務: 回基地";
+ }
+ if(player.treasure && player.x===base.x && player.y===base.y){
+   player.treasure=false;
+   floor++;
+   gainExp(50);
+   score+=500;
+   treasure=newTreasure();
+   document.getElementById("mission").innerText="任務: 找到寶藏";
+   msg("進入地下 "+floor+" 層");
+ }
+
+ towers.forEach(t=>{
+   if(t.cd>0){t.cd--;return;}
+   let target=monsters.find(m=>Math.hypot(m.x-t.x,m.y-t.y)<4);
+   if(target){
+      target.hp -= t.type===1?8:5;
+      t.cd=t.type===1?15:8;
+   }
+ });
+
+ for(let i=monsters.length-1;i>=0;i--){
+   let m=monsters[i];
+   if(m.hp<=0){
+      monsters.splice(i,1);
+      score+=20;
+      gold+=20;
+      gainExp(10);
+      continue;
+   }
+   if(m.x>base.x)m.x--;
+   else if(m.x<base.x)m.x++;
+   if(m.y>base.y)m.y--;
+   else if(m.y<base.y)m.y++;
+   if(m.x===base.x&&m.y===base.y){
+      monsters.splice(i,1);
+      hp-=10;
+      if(hp<=0){
+        localStorage.setItem("v5best",Math.max(score,+(localStorage.getItem("v5best")||0)));
+        alert("遊戲結束\n分數:"+score+"\n最佳:"+localStorage.getItem("v5best"));
+        location.reload();
+      }
+   }
+ }
+}
+
+function draw(){
+ ctx.clearRect(0,0,640,640);
+ for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+   ctx.strokeStyle="#333";
+   ctx.strokeRect(x*T,y*T,T,T);
+ }
+ drawEmoji(base.x,base.y,"🏠");
+ if(treasure.x>0) drawEmoji(treasure.x,treasure.y,treasure.emoji);
+ towers.forEach(t=>drawEmoji(t.x,t.y,t.type===1?"🏹":"🔥"));
+ monsters.forEach(m=>{
+   drawEmoji(m.x,m.y,"👾");
+   ctx.fillStyle="red"; ctx.fillRect(m.x*T,m.y*T-4,24,3);
+   ctx.fillStyle="lime"; ctx.fillRect(m.x*T,m.y*T-4,24*(m.hp/m.max),3);
+ });
+ drawEmoji(player.x,player.y,"🧙");
+ if(player.treasure) drawEmoji(player.x,player.y,"💎");
+ document.getElementById("gold").innerText=gold;
+ document.getElementById("score").innerText=score;
+ document.getElementById("hp").innerText=hp;
+ document.getElementById("floor").innerText=floor;
+ document.getElementById("level").innerText=level;
+}
+
+function loop(){update();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
