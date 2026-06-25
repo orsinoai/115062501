@@ -4,11 +4,21 @@
 <meta charset="utf-8">
 <title>地下寶藏守衛 V5</title>
 <style>
-body{margin:0;background:#111;color:#fff;font-family:Arial}
-#hud{display:flex;gap:15px;padding:8px;background:#222;flex-wrap:wrap}
-#mission{color:#ffd54f}
-#msg{padding:8px;background:#333}
-canvas{display:block;margin:auto;background:#1b1b1b}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at top, #2b2b50, #0c0c12 45%);color:#eee;font-family:"Segoe UI",Tahoma,Arial,sans-serif;}
+#hud{display:flex;gap:12px;padding:14px 16px;background:rgba(18,22,37,0.9);backdrop-filter:blur(12px);box-shadow:0 10px 30px rgba(0,0,0,0.45);flex-wrap:wrap;align-items:center;}
+#hud>div{padding:10px 14px;border-radius:14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);box-shadow:inset 0 0 3px rgba(255,255,255,0.03);}
+#hud>div span{font-weight:700;}
+#mission{color:#7cdbff;font-weight:700;flex:1;min-width:220px;}
+#msg{margin:12px auto 16px;padding:12px 16px;width:calc(100% - 40px);max-width:720px;background:rgba(4,8,19,0.92);border:1px solid rgba(255,255,255,0.08);border-left:4px solid #7cdbff;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.25);font-size:0.95rem;}
+canvas{display:block;margin:0 auto 28px;border:2px solid rgba(255,255,255,0.12);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,0.45);background:#121629;}
+@media(max-width:720px){#hud{justify-content:center;}canvas{width:90vw;height:90vw;}#db-panel{width:90vw;}}</style>
+<style>
+#db-panel{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px;max-width:1024px;margin:0 auto 32px;padding:0 16px;}
+.table-card{background:rgba(13,18,31,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:16px;box-shadow:0 18px 45px rgba(0,0,0,0.25);padding:16px;}
+.table-card h3{margin:0 0 10px;font-size:1rem;color:#7cdbff;}
+.table-card pre{margin:0;font-size:0.82rem;line-height:1.4;color:#e2e8f0;white-space:pre-wrap;word-break:break-word;}
+@media(max-width:940px){#db-panel{grid-template-columns:repeat(2,minmax(220px,1fr));}}
+@media(max-width:680px){#db-panel{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -16,22 +26,151 @@ canvas{display:block;margin:auto;background:#1b1b1b}
 <div>💰<span id="gold">500</span></div>
 <div>⭐<span id="score">0</span></div>
 <div>❤️<span id="hp">100</span></div>
+<div>🏆<span id="bestScore">0</span></div>
 <div>🧙 Lv.<span id="level">1</span></div>
 <div>📍Floor <span id="floor">1</span></div>
+<div>⚒️<span id="buildType">箭塔</span></div>
 <div id="mission">任務: 找到寶藏</div>
 </div>
 <div id="msg">WASD移動、1箭塔、2火塔、E建造</div>
 <canvas id="g" width="640" height="640"></canvas>
+<div id="db-panel">
+  <div class="table-card"><h3>Player</h3><pre id="db-player"></pre></div>
+  <div class="table-card"><h3>Tower</h3><pre id="db-tower"></pre></div>
+  <div class="table-card"><h3>Monster</h3><pre id="db-monster"></pre></div>
+  <div class="table-card"><h3>Treasure</h3><pre id="db-treasure"></pre></div>
+  <div class="table-card"><h3>BestScore / Leaderboard</h3><pre id="db-best"></pre></div>
+</div>
 <script>
 const c=g,ctx=c.getContext('2d');
 const T=32,S=20;
 let gold=500,score=0,hp=100,floor=1,exp=0,level=1;
 let buildType=1;
 const player={x:1,y:1,treasure:false};
+const buildLabel=["箭塔","火塔"];
+function getBuildName(){return buildLabel[buildType-1];}
+function updateBuildLabel(){document.getElementById("buildType").innerText=getBuildName();}
+
+const DATABASE = {
+  users: "v5_users",
+  playerSave: "v5_player_save",
+  leaderboard: "v5_leaderboard",
+  gameRecords: "v5_game_record",
+  treasureRecords: "v5_treasure_record"
+};
+let bestScore = 0;
+let bestFloor = 1;
+let playStart = Date.now();
+let gameRecords = [];
+let treasureRecords = [];
+const CURRENT_USER_ID = 1;
+
 const base={x:18,y:18};
 let treasure=newTreasure();
 const towers=[];
 const monsters=[];
+
+function storageGet(key, defaultValue){
+ const raw = localStorage.getItem(key);
+ if(raw===null) return defaultValue;
+ try { return JSON.parse(raw); }
+ catch(e) { return defaultValue; }
+}
+function storageSet(key, value){
+ localStorage.setItem(key, JSON.stringify(value));
+}
+function loadUsers(){
+ const users = storageGet(DATABASE.users, []);
+ if(users.length === 0){
+   const guest = {
+     id: CURRENT_USER_ID,
+     username: "guest",
+     password: null,
+     level,
+     exp,
+     created_at: new Date().toISOString()
+   };
+   storageSet(DATABASE.users, [guest]);
+ }
+}
+function loadGameState(){
+ const save = storageGet(DATABASE.playerSave, null);
+ if(save){
+   gold = save.gold ?? gold;
+   score = save.score ?? score;
+   hp = save.hp ?? hp;
+   floor = save.floor ?? floor;
+   exp = save.exp ?? exp;
+   level = save.level ?? level;
+   buildType = save.buildType ?? buildType;
+   player.x = save.player?.x ?? player.x;
+   player.y = save.player?.y ?? player.y;
+   player.treasure = !!save.player?.treasure;
+   treasure = save.treasure ?? treasure;
+   if(Array.isArray(save.towers)){
+     towers.splice(0, towers.length, ...save.towers);
+   }
+   if(Array.isArray(save.monsters)){
+     monsters.splice(0, monsters.length, ...save.monsters);
+   }
+ }
+ const leaderboard = storageGet(DATABASE.leaderboard, null);
+ if(leaderboard){
+   bestScore = leaderboard.bestScore || bestScore;
+   bestFloor = leaderboard.bestFloor || bestFloor;
+ }
+ gameRecords = storageGet(DATABASE.gameRecords, []);
+ treasureRecords = storageGet(DATABASE.treasureRecords, []);
+}
+function saveGameState(){
+ const save = {
+   user_id: CURRENT_USER_ID,
+   gold,
+   score,
+   hp,
+   floor,
+   exp,
+   level,
+   buildType,
+   player:{...player},
+   treasure,
+   towers,
+   monsters
+ };
+ storageSet(DATABASE.playerSave, save);
+}
+function updateLeaderboard(){
+ if(score > bestScore) bestScore = score;
+ if(floor > bestFloor) bestFloor = floor;
+ const leaderboard = {
+   user_id: CURRENT_USER_ID,
+   bestScore,
+   bestFloor,
+   updatedAt: new Date().toISOString()
+ };
+ storageSet(DATABASE.leaderboard, leaderboard);
+}
+function saveGameRecord(){
+ gameRecords.push({
+   id: Date.now(),
+   user_id: CURRENT_USER_ID,
+   floor_level: floor,
+   score,
+   play_time: Math.floor((Date.now()-playStart)/1000),
+   created_at: new Date().toISOString()
+ });
+ storageSet(DATABASE.gameRecords, gameRecords);
+}
+function saveTreasureRecord(found){
+ treasureRecords.push({
+   id: Date.now(),
+   user_id: CURRENT_USER_ID,
+   rarity: found.emoji,
+   value: found.value,
+   found_at: new Date().toISOString()
+ });
+ storageSet(DATABASE.treasureRecords, treasureRecords);
+}
 
 function newTreasure(){
  const r=Math.random();
@@ -55,6 +194,7 @@ document.addEventListener("keydown",e=>{
  if(e.key=="e" && gold>=100){
    towers.push({x:player.x,y:player.y,type:buildType,cd:0,lv:1});
    gold-=100;
+   saveGameState();
  }
 });
 
@@ -73,11 +213,50 @@ function drawEmoji(x,y,e){
  ctx.fillText(e,x*T+4,y*T+24);
 }
 
+function drawBackground(){
+ const bg = ctx.createRadialGradient(320,320,0,320,320,420);
+ bg.addColorStop(0,"rgba(140,170,255,0.08)");
+ bg.addColorStop(1,"rgba(8,12,24,0.95)");
+ ctx.fillStyle = bg;
+ ctx.fillRect(0,0,640,640);
+ for(let y=0;y<S;y++){
+   for(let x=0;x<S;x++){
+     if((x+y)%2===0){
+       ctx.fillStyle = "rgba(255,255,255,0.02)";
+       ctx.fillRect(x*T,y*T,T,T);
+     }
+   }
+ }
+}
+
+function drawPreview(){
+ const range = buildType===1 ? 3 : 2;
+ ctx.strokeStyle = buildType===1 ? "rgba(155,231,255,0.4)" : "rgba(255,184,107,0.35)";
+ ctx.lineWidth = 2;
+ ctx.setLineDash([6,6]);
+ ctx.beginPath();
+ ctx.arc(player.x*T+16, player.y*T+16, range*T, 0, Math.PI*2);
+ ctx.stroke();
+ ctx.setLineDash([]);
+}
+
+function renderDbPanel(){
+  document.getElementById("db-player").innerText = JSON.stringify(player, null, 2);
+  document.getElementById("db-tower").innerText = JSON.stringify(towers, null, 2);
+  document.getElementById("db-monster").innerText = JSON.stringify(monsters, null, 2);
+  document.getElementById("db-treasure").innerText = JSON.stringify(treasure, null, 2);
+  document.getElementById("db-best").innerText = JSON.stringify({bestScore,bestFloor}, null, 2);
+}
+
 function update(){
+ updateBuildLabel();
+ renderDbPanel();
+
  if(player.x===treasure.x && player.y===treasure.y){
    player.treasure=true;
    score+=treasure.value;
    gold+=100;
+   saveTreasureRecord(treasure);
    msg("取得 "+treasure.emoji);
    treasure={x:-99,y:-99};
    document.getElementById("mission").innerText="任務: 回基地";
@@ -90,6 +269,7 @@ function update(){
    treasure=newTreasure();
    document.getElementById("mission").innerText="任務: 找到寶藏";
    msg("進入地下 "+floor+" 層");
+   saveGameState();
  }
 
  towers.forEach(t=>{
@@ -129,8 +309,10 @@ function update(){
       monsters.splice(i,1);
       hp-=10;
       if(hp<=0){
-        localStorage.setItem("v5best",Math.max(score,+(localStorage.getItem("v5best")||0)));
-        alert("遊戲結束\n分數:"+score+"\n最佳:"+localStorage.getItem("v5best"));
+        updateLeaderboard();
+        saveGameRecord();
+        saveGameState();
+        alert("遊戲結束\n分數:"+score+"\n最佳:"+bestScore);
         location.reload();
       }
    }
@@ -138,13 +320,22 @@ function update(){
 }
 
 function draw(){
- ctx.clearRect(0,0,640,640);
+ drawBackground();
+ // 移動格子線和底色已在背景中繪製，這裡再加上鏡面底紋
  for(let y=0;y<S;y++)for(let x=0;x<S;x++){
-   ctx.strokeStyle="#333";
+   ctx.strokeStyle = "rgba(255,255,255,0.08)";
    ctx.strokeRect(x*T,y*T,T,T);
  }
+ const glow = ctx.createRadialGradient(base.x*T+16, base.y*T+16, 0, base.x*T+16, base.y*T+16, 80);
+ glow.addColorStop(0, "rgba(255,215,100,0.35)");
+ glow.addColorStop(1, "rgba(255,215,100,0)");
+ ctx.fillStyle = glow;
+ ctx.beginPath();
+ ctx.arc(base.x*T+16, base.y*T+16, 70, 0, Math.PI*2);
+ ctx.fill();
  drawEmoji(base.x,base.y,"🏠");
  if(treasure.x>0) drawEmoji(treasure.x,treasure.y,treasure.emoji);
+ drawPreview();
  // 繪製塔與攻擊特效
  towers.forEach(t=>{
    drawEmoji(t.x,t.y,t.type===1?"🏹":"🔥");
@@ -155,29 +346,31 @@ function draw(){
      ctx.moveTo(t.x*T+16,t.y*T+16);
      ctx.lineTo(t.targetX*T+16,t.targetY*T+16);
      ctx.stroke();
-     t.hitAnim--;
    }
  });
  // 繪製怪物與命中特效/血條
  monsters.forEach(m=>{
   drawEmoji(m.x,m.y,"👾");
   if(m.hitAnim>0){
-    ctx.fillStyle = "rgba(255,0,0,0.7)";
+    ctx.fillStyle = "rgba(255,0,0,0.65)";
     ctx.beginPath(); ctx.arc(m.x*T+16,m.y*T+8,8,0,Math.PI*2); ctx.fill();
   }
-  ctx.fillStyle="red"; ctx.fillRect(m.x*T,m.y*T-4,24,3);
+  ctx.fillStyle="rgba(255,0,0,0.85)"; ctx.fillRect(m.x*T,m.y*T-4,24,3);
   ctx.fillStyle="lime"; ctx.fillRect(m.x*T,m.y*T-4,24*(m.hp/m.max),3);
  });
  drawEmoji(player.x,player.y,"🧙");
  if(player.treasure) drawEmoji(player.x,player.y,"💎");
  document.getElementById("gold").innerText=gold;
  document.getElementById("score").innerText=score;
+ document.getElementById("bestScore").innerText=bestScore;
  document.getElementById("hp").innerText=hp;
  document.getElementById("floor").innerText=floor;
  document.getElementById("level").innerText=level;
 }
 
-function loop(){update();draw();requestAnimationFrame(loop);}
+loadGameState();
+updateLeaderboard();
+function loop(){update();draw();renderDbPanel();requestAnimationFrame(loop);}
 loop();
 </script>
 </body>
