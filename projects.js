@@ -90,5 +90,14 @@ const projects = [
     url: "https://zxc51119-karve.github.io/115326001/guardian_olympus_v3a.html",
     status: "可展示",
     note: "奧林帕斯守護者"
+  },
+  {
+    name: "曾智偉",
+    time: "10:35",
+    title: "RPG MVP Demo",
+    type: "RPG 遊戲 Prototype",
+    url: "https://kentralf.github.io/web0422/rpg-mvp-demo.html",
+    status: "可展示",
+    note: "RPG MVP 展示作品"
   }
 ];
