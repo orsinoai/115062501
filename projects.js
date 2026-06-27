@@ -99,5 +99,14 @@ const projects = [
     url: "https://kentralf.github.io/web0422/rpg-mvp-demo.html",
     status: "可展示",
     note: "RPG MVP 展示作品"
+  },
+  {
+    name: "陳瑋生",
+    time: "11:24",
+    title: "WS Project",
+    type: "作品 Prototype",
+    url: "https://shadowe-178.github.io/WSprojact/",
+    status: "可展示",
+    note: "學生作品展示"
   }
 ];
