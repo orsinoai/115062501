@@ -108,7 +108,8 @@ const projects = [
     url: "https://shadowe-178.github.io/WSprojact/",
     status: "可展示",
     note: "學生作品展示"
-  },{
+  },
+  {
   name: "楊柏翔",
   time: "9:27",
   title: "MachineRift Demo",
