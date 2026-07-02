@@ -108,5 +108,13 @@ const projects = [
     url: "https://shadowe-178.github.io/WSprojact/",
     status: "可展示",
     note: "學生作品展示"
-  }
+  },{
+  name: "楊柏翔",
+  time: "9:27 PM",
+  title: "MachineRift Demo",
+  type: "遊戲 Prototype",
+  url: "https://xiang0906.github.io/1150625/MachineRift_Demo_v1.html",
+  status: "可展示",
+  note: "MachineRift 展示作品"
+}
 ];
