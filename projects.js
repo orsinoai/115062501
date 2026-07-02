@@ -110,7 +110,7 @@ const projects = [
     note: "學生作品展示"
   },{
   name: "楊柏翔",
-  time: "9:27 PM",
+  time: "9:27",
   title: "MachineRift Demo",
   type: "遊戲 Prototype",
   url: "https://xiang0906.github.io/1150625/MachineRift_Demo_v1.html",
